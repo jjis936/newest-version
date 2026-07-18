@@ -1,0 +1,17 @@
+{
+  "name": "sinner-services-bot",
+  "version": "2.0.0",
+  "description": "Sinner Services Discord bot - consolidated rewrite",
+  "main": "bot.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node deploy-commands.js && node bot.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^16.6.1"
+  }
+}
