@@ -520,8 +520,6 @@ const slashCommands = [
             .setDescription("List everything this bot can do"),
 
         async execute(interaction){
-            // Built from the same slashCommands array used to register commands,
-            // so this can never drift out of sync with what's actually available.
             const lines = slashCommands
                 .filter(c => c.data.name !== "help")
                 .map(c => `**/${c.data.name}** — ${c.data.description}`)
@@ -536,7 +534,7 @@ const slashCommands = [
         }
     },
 
-    // -- Self-diagnostic status command (the "surprise") --------------------
+    // -- Self-diagnostic status command --------------------
     {
         data: new SlashCommandBuilder()
             .setName("status")
@@ -802,7 +800,11 @@ const selectHandlers = {
                 type: ChannelType.GuildText,
                 permissionOverwrites: [
                     { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+                    // Explicitly grant the bot itself access - without this, if the
+                    // bot's role doesn't have server-wide Send Messages, it can
+                    // create the channel but then silently fail to post in it.
+                    { id: interaction.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ReadMessageHistory] }
                 ]
             });
         }catch(err){
@@ -827,7 +829,15 @@ const selectHandlers = {
             new ButtonBuilder().setCustomId("close_ticket").setLabel("🔒 Close").setStyle(ButtonStyle.Danger)
         );
 
-        await channel.send({ content: `${interaction.user}`, embeds: [embed], components: [row] });
+        try{
+            await channel.send({ content: `${interaction.user}`, embeds: [embed], components: [row] });
+        }catch(err){
+            console.log(`[ticket] ❌ channel created but could not send embed: ${err.message}`);
+            return interaction.reply({
+                content: `⚠️ Ticket channel ${channel} was created, but I couldn't post in it (\`${err.message}\`). Check that the bot's role has **Send Messages** and **Embed Links** permissions.`,
+                ephemeral: true
+            });
+        }
 
         const log = ticketLogDB.read();
         log.open.push({ channelId: channel.id, user: interaction.user.id, service: choice, created: new Date().toISOString() });
@@ -910,8 +920,6 @@ const modalHandlers = {
         const comment = interaction.fields.getTextInputValue("comment");
         const userId = interaction.user.id;
 
-        // Don't post yet - wait for the proof photo so everything goes out
-        // as ONE combined message instead of two separate ones.
         const existing = pendingVouchPhotos.get(userId);
         if(existing) clearTimeout(existing.timer);
 
@@ -923,7 +931,7 @@ const modalHandlers = {
             content: `**Rating:** ${"⭐".repeat(rating)}\n**Comment:** ${comment}`,
             rating,
             timestamp: Date.now(),
-            textMessageId: null, // no channel message to clean up - this came from a modal
+            textMessageId: null,
             timer
         });
 
@@ -949,11 +957,11 @@ async function handleLeaveVouchMessage(message){
     if(message.author.bot) return;
 
     if(!CONFIG.LEAVE_VOUCH_CHANNEL_ID){
-        return; // not configured, nothing to do
+        return;
     }
 
     if(message.channel.id !== CONFIG.LEAVE_VOUCH_CHANNEL_ID){
-        return; // wrong channel, ignore
+        return;
     }
 
     console.log(`[leave-vouch] message from ${message.author.tag} in leave-vouch channel`);
@@ -962,8 +970,6 @@ async function handleLeaveVouchMessage(message){
         console.log("[leave-vouch] ⚠️ VOUCH_CHANNEL_ID is not set — cannot post vouches. Set it in your env vars.");
     }
 
-    // Robust image check: contentType is preferred, but Discord doesn't always
-    // populate it, so fall back to checking the file extension in the URL.
     const imageAttachment = message.attachments.find(a => {
         if(a.contentType && a.contentType.startsWith("image/")) return true;
         return /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(a.url || a.name || "");
@@ -1026,8 +1032,6 @@ async function handleLeaveVouchMessage(message){
 
     }
 
-    // Case 1: message includes a photo - either completes a pending text
-    // vouch, or stands alone as a photo-only vouch.
     if(hasImage){
 
         if(pending && Date.now() - pending.timestamp < CONFIG.VOUCH_PHOTO_WINDOW_MS){
@@ -1063,13 +1067,12 @@ async function handleLeaveVouchMessage(message){
         return;
     }
 
-    // Case 2: text-only message - start the 5 minute proof-photo window
     console.log(`[leave-vouch] text-only message, starting ${CONFIG.VOUCH_PHOTO_WINDOW_MS / 60000}min photo window`);
 
     const timer = setTimeout(async () => {
 
         const stillPending = pendingVouchPhotos.get(userId);
-        if(!stillPending) return; // already fulfilled by a photo
+        if(!stillPending) return;
 
         pendingVouchPhotos.delete(userId);
         console.log(`[leave-vouch] photo window expired for ${userId}, deleting original message`);
