@@ -49,16 +49,38 @@ const CONFIG = {
         { label: "Philippines", value: "philippines", slugs: { "5sim": "philippines", smspool: "philippines" } }
     ],
 
+    BRAND_ICON_URL: process.env.BRAND_ICON_URL || null,
+
     TICKET_SERVICES: [
-        { label: "Champions Quest Support", value: "champions", emoji: "🏆" },
-        { label: "Warzone Rank Boost", value: "warzone", emoji: "⚔️" },
-        { label: "Multiplayer Rank Boost", value: "multiplayer", emoji: "🔥" }
+        { label: "Nuke Services", value: "nuke", emoji: "☢️" },
+        { label: "WZ Ranked Boost", value: "wz_ranked", emoji: "⚔️" },
+        { label: "MP Ranked Boost", value: "mp_ranked", emoji: "🔫" },
+        { label: "Camos", value: "camos", emoji: "🎨" }
     ]
 };
 
 function countrySlug(value, provider){
     const entry = CONFIG.SMS_COUNTRIES.find(c => c.value === value);
     return entry ? entry.slugs[provider] : value;
+}
+
+// Shared "house style" embed builder - every command uses this so they all
+// look consistent instead of each one improvising its own layout.
+function brandEmbed({ title, description, fields, thumbnail, color }){
+    const embed = new EmbedBuilder()
+        .setColor(color || CONFIG.COLOR)
+        .setTitle(title)
+        .setFooter({
+            text: `${CONFIG.BRAND_NAME}`,
+            iconURL: CONFIG.BRAND_ICON_URL || undefined
+        })
+        .setTimestamp();
+
+    if(description) embed.setDescription(description);
+    if(fields && fields.length) embed.addFields(fields);
+    if(thumbnail !== false && CONFIG.BRAND_ICON_URL) embed.setThumbnail(CONFIG.BRAND_ICON_URL);
+
+    return embed;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,22 +194,15 @@ const slashCommands = [
 
         async execute(interaction){
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} ${CONFIG.BRAND_NAME.toUpperCase()}`)
-                .setDescription(
-                    "# ⭐ CUSTOMER REVIEWS\n\n" +
-                    `Thank you for choosing **${CONFIG.BRAND_NAME}**.\n\n` +
-                    "We appreciate your honest feedback and support.\n\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\n\n" +
-                    "⭐ **Rating**\nChoose your experience from 1-5 stars.\n\n" +
-                    "💬 **Feedback**\nTell us about your experience.\n\n" +
-                    "📸 **Proof**\nDrop a screenshot in this channel within 5 minutes of leaving your vouch.\n\n" +
-                    "━━━━━━━━━━━━━━━━━━━━\n\n" +
-                    "Click the button below to leave your review."
-                )
-                .setFooter({ text: `${CONFIG.BRAND_NAME} • Vouch System` })
-                .setTimestamp();
+            const embed = brandEmbed({
+                title: "⭐ Customer Reviews",
+                description: `Thank you for choosing **${CONFIG.BRAND_NAME}**. We appreciate your honest feedback.`,
+                fields: [
+                    { name: "⭐ Rating", value: "Rate your experience from 1–5 stars.", inline: true },
+                    { name: "💬 Feedback", value: "Tell us how it went.", inline: true },
+                    { name: "📸 Proof", value: `Drop a screenshot in this channel within 5 minutes of submitting.`, inline: true }
+                ]
+            });
 
             const button = new ButtonBuilder()
                 .setCustomId("leave_vouch")
@@ -211,15 +226,20 @@ const slashCommands = [
 
         async execute(interaction){
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} ${CONFIG.BRAND_NAME} - Open a Ticket`)
-                .setDescription("Pick what you need below and a private channel will be created for you.")
-                .setFooter({ text: CONFIG.BRAND_NAME });
+            const embed = brandEmbed({
+                title: "Choose Your Service",
+                description: `Select an option below and a private ticket will be created just for you.`,
+                fields: [
+                    {
+                        name: "How it works",
+                        value: "1️⃣ Pick a service from the dropdown\n2️⃣ A private channel opens for you\n3️⃣ Staff will claim & assist you there"
+                    }
+                ]
+            });
 
             const menu = new StringSelectMenuBuilder()
                 .setCustomId("ticket_select")
-                .setPlaceholder("Choose a service...")
+                .setPlaceholder("Services")
                 .addOptions(CONFIG.TICKET_SERVICES.map(s => ({
                     label: s.label, value: s.value, emoji: s.emoji
                 })));
@@ -245,16 +265,14 @@ const slashCommands = [
                 ? (stats.ratingSum / stats.totalVouches).toFixed(1)
                 : "0.0";
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} ${CONFIG.BRAND_NAME.toUpperCase()} STATS`)
-                .setDescription(
-                    `📊 **Total Vouches**\n${stats.totalVouches}\n\n` +
-                    `⭐ **Average Rating**\n${avg}/5\n\n` +
-                    `🏆 **Reputation**\n${avg >= 4.5 ? "Excellent ⭐⭐⭐⭐⭐" : "Growing ⭐⭐⭐⭐"}`
-                )
-                .setFooter({ text: `${CONFIG.BRAND_NAME} • Statistics` })
-                .setTimestamp();
+            const embed = brandEmbed({
+                title: `${CONFIG.BRAND_NAME} Statistics`,
+                fields: [
+                    { name: "📊 Total Vouches", value: `${stats.totalVouches}`, inline: true },
+                    { name: "⭐ Average Rating", value: `${avg}/5`, inline: true },
+                    { name: "🏆 Reputation", value: avg >= 4.5 ? "Excellent ⭐⭐⭐⭐⭐" : "Growing ⭐⭐⭐⭐", inline: true }
+                ]
+            });
 
             await interaction.reply({ embeds: [embed] });
 
@@ -279,11 +297,10 @@ const slashCommands = [
                 ? sorted.map(([id, u], i) => `**${i + 1}.** <@${id}> — ${u.vouches} vouches`).join("\n")
                 : "No vouches yet.";
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} TOP CUSTOMERS`)
-                .setDescription(lines)
-                .setFooter({ text: CONFIG.BRAND_NAME });
+            const embed = brandEmbed({
+                title: "🏆 Top Customers",
+                description: lines
+            });
 
             await interaction.reply({ embeds: [embed] });
 
@@ -305,11 +322,14 @@ const slashCommands = [
             const minutes = interaction.options.getInteger("minutes");
             const endTime = Date.now() + minutes * 60000;
 
-            const embed = new EmbedBuilder()
-                .setColor("#b026ff")
-                .setTitle("🎉 GIVEAWAY")
-                .setDescription(`🎁 **Prize**\n${prize}\n\nEnds <t:${Math.floor(endTime / 1000)}:R>`)
-                .setTimestamp();
+            const embed = brandEmbed({
+                title: "🎉 Giveaway",
+                color: "#b026ff",
+                fields: [
+                    { name: "🎁 Prize", value: prize, inline: true },
+                    { name: "⏰ Ends", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true }
+                ]
+            });
 
             const enterButton = new ButtonBuilder()
                 .setCustomId("giveaway_enter")
@@ -432,11 +452,10 @@ const slashCommands = [
 
             smsSessions.set(interaction.user.id, {});
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} NUMBER RENTAL`)
-                .setDescription("Pick a provider to get started.")
-                .setFooter({ text: `${CONFIG.BRAND_NAME} • SMS Verification` });
+            const embed = brandEmbed({
+                title: "📱 Number Rental",
+                description: "Pick a provider to get started."
+            });
 
             const menu = new StringSelectMenuBuilder()
                 .setCustomId("sms_provider_select")
@@ -469,11 +488,10 @@ const slashCommands = [
             const lines = recent.length
                 ? recent.map(o => `**${o.id}** • <@${o.buyer}> • ${o.provider} • ${o.service}/${o.country} • ${o.status}`).join("\n")
                 : "No orders yet.";
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} RECENT NUMBER ORDERS`)
-                .setDescription(lines)
-                .setFooter({ text: `${CONFIG.BRAND_NAME} • Staff Log` });
+            const embed = brandEmbed({
+                title: "🧾 Recent Number Orders",
+                description: lines
+            });
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
     },
@@ -509,11 +527,10 @@ const slashCommands = [
                 .map(c => `**/${c.data.name}** — ${c.data.description}`)
                 .join("\n");
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} ${CONFIG.BRAND_NAME} — Commands`)
-                .setDescription(lines)
-                .setFooter({ text: CONFIG.BRAND_NAME });
+            const embed = brandEmbed({
+                title: `${CONFIG.BRAND_NAME} — Commands`,
+                description: lines
+            });
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
@@ -555,17 +572,15 @@ const slashCommands = [
 
             const lines = checks.map(([name, ok]) => `${ok ? "✅" : "❌"} ${name}`).join("\n");
 
-            const embed = new EmbedBuilder()
-                .setColor(CONFIG.COLOR)
-                .setTitle(`${CONFIG.BRAND_EMOJI} BOT STATUS`)
-                .setDescription(
-                    `${lines}\n\n` +
-                    `📢 **Vouch channel:** ${vouchChannelOk}\n` +
-                    `📝 **Leave-vouch channel:** ${leaveVouchChannelOk}\n\n` +
-                    `If anything above is ❌, that's almost certainly why a feature is failing.`
-                )
-                .setFooter({ text: CONFIG.BRAND_NAME })
-                .setTimestamp();
+            const embed = brandEmbed({
+                title: "🩺 Bot Status",
+                fields: [
+                    { name: "Environment", value: lines },
+                    { name: "📢 Vouch channel", value: vouchChannelOk },
+                    { name: "📝 Leave-vouch channel", value: leaveVouchChannelOk }
+                ],
+                description: "If anything above is ❌, that's almost certainly why a feature is failing."
+            });
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
 
@@ -674,11 +689,13 @@ const buttonHandlers = {
         session.localOrderId = orderId;
         smsSessions.set(interaction.user.id, session);
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle(`${CONFIG.BRAND_EMOJI} NUMBER READY`)
-            .setDescription(`☎️ **Number**\n${purchase.phone}\n\n🧾 **Order**\n${orderId}`)
-            .setFooter({ text: `${CONFIG.BRAND_NAME} • SMS Verification` });
+        const embed = brandEmbed({
+            title: "✅ Number Ready",
+            fields: [
+                { name: "☎️ Number", value: `${purchase.phone}`, inline: true },
+                { name: "🧾 Order", value: `${orderId}`, inline: true }
+            ]
+        });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId("sms_check").setLabel("📩 Check SMS").setStyle(ButtonStyle.Primary),
@@ -778,20 +795,32 @@ const selectHandlers = {
             return interaction.reply({ content: "❌ You already have an open ticket.", ephemeral: true });
         }
 
-        const channel = await interaction.guild.channels.create({
-            name: `ticket-${interaction.user.username}`.toLowerCase(),
-            type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
-            ]
-        });
+        let channel;
+        try{
+            channel = await interaction.guild.channels.create({
+                name: `ticket-${interaction.user.username}`.toLowerCase(),
+                type: ChannelType.GuildText,
+                permissionOverwrites: [
+                    { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+                ]
+            });
+        }catch(err){
+            console.log(`[ticket] ❌ could not create ticket channel: ${err.message}`);
+            return interaction.reply({
+                content: `❌ Couldn't create your ticket (\`${err.message}\`). This almost always means the bot's role is missing **Manage Channels** / **Manage Roles**, or its role sits below a role it's trying to set permissions for. Ask a staff member to check the bot's role permissions.`,
+                ephemeral: true
+            });
+        }
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle(`${CONFIG.BRAND_EMOJI} Order Setup`)
-            .setDescription(`👤 **Customer**\n${interaction.user}\n\n🎯 **Service**\n${service.emoji} ${service.label}\n\nA staff member will help finalize your order.`)
-            .setFooter({ text: CONFIG.BRAND_NAME });
+        const embed = brandEmbed({
+            title: "🎫 Order Setup",
+            fields: [
+                { name: "👤 Customer", value: `${interaction.user}`, inline: true },
+                { name: "🎯 Service", value: `${service.emoji} ${service.label}`, inline: true }
+            ],
+            description: "A staff member will help finalize your order shortly."
+        });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId("claim_ticket").setLabel("🙋 Claim").setStyle(ButtonStyle.Primary),
@@ -811,11 +840,11 @@ const selectHandlers = {
     async sms_provider_select(interaction){
         smsSessions.set(interaction.user.id, { provider: interaction.values[0] });
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle(`${CONFIG.BRAND_EMOJI} NUMBER RENTAL`)
-            .setDescription(`Provider: **${interaction.values[0]}**\n\nNow pick a service:`)
-            .setFooter({ text: `${CONFIG.BRAND_NAME} • SMS Verification` });
+        const embed = brandEmbed({
+            title: "📱 Number Rental",
+            fields: [{ name: "Provider", value: interaction.values[0], inline: true }],
+            description: "Now pick a service:"
+        });
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId("sms_service_select")
@@ -830,11 +859,14 @@ const selectHandlers = {
         session.service = interaction.values[0];
         smsSessions.set(interaction.user.id, session);
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle(`${CONFIG.BRAND_EMOJI} NUMBER RENTAL`)
-            .setDescription(`Provider: **${session.provider}** | Service: **${session.service}**\n\nNow pick a region:`)
-            .setFooter({ text: `${CONFIG.BRAND_NAME} • SMS Verification` });
+        const embed = brandEmbed({
+            title: "📱 Number Rental",
+            fields: [
+                { name: "Provider", value: session.provider, inline: true },
+                { name: "Service", value: session.service, inline: true }
+            ],
+            description: "Now pick a region:"
+        });
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId("sms_country_select")
@@ -849,11 +881,15 @@ const selectHandlers = {
         session.country = interaction.values[0];
         smsSessions.set(interaction.user.id, session);
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle(`${CONFIG.BRAND_EMOJI} NUMBER RENTAL`)
-            .setDescription(`Provider: **${session.provider}**\nService: **${session.service}**\nRegion: **${session.country}**\n\nReady to buy.`)
-            .setFooter({ text: `${CONFIG.BRAND_NAME} • SMS Verification` });
+        const embed = brandEmbed({
+            title: "📱 Number Rental",
+            fields: [
+                { name: "Provider", value: session.provider, inline: true },
+                { name: "Service", value: session.service, inline: true },
+                { name: "Region", value: session.country, inline: true }
+            ],
+            description: "Ready to buy."
+        });
 
         const buy = new ButtonBuilder().setCustomId("sms_buy").setLabel("💳 Buy Number").setStyle(ButtonStyle.Success);
 
@@ -956,11 +992,13 @@ async function handleLeaveVouchMessage(message){
             return false;
         }
 
-        const embed = new EmbedBuilder()
-            .setColor(CONFIG.COLOR)
-            .setTitle("⭐ New Vouch")
-            .setDescription(`**From:** <@${userId}>\n**Message:** ${content || "*(no message)*"}`)
-            .setTimestamp();
+        const embed = brandEmbed({
+            title: "⭐ New Vouch",
+            description: content || "*(no message)*"
+        }).setAuthor({
+            name: message.author.tag,
+            iconURL: message.author.displayAvatarURL()
+        });
 
         if(imageUrl) embed.setImage(imageUrl);
 
